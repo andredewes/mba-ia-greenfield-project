@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
-**Status:** in-progress
-**SIs:** 9/9 implemented (DoD verification in progress)
+**Status:** completed
+**SIs:** 9/9 completed — Definition of Done green (npm test 189/189, e2e 63/63, tsc exit 0, lint 0 errors)
 
 ### SI-03.1 — Dependencies, Config Namespaces, Env, and Infra (Redis + MinIO)
 - **Status:** completed
