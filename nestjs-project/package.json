@@ -12,6 +12,8 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
+    "start:worker": "ts-node --transpile-only -r tsconfig-paths/register src/worker/main.ts",
+    "start:worker:dev": "nest start --watch --entryFile worker/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",

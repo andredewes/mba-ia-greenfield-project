@@ -42,7 +42,9 @@ describe('StorageService (integration — real MinIO)', () => {
   it('round-trips a multipart upload and verifies size via headObject', async () => {
     const key = `test/${randomUUID()}/original`;
     keys.push(key);
-    const payload = Buffer.from('hello streamtube multipart upload payload');
+    const payload = new Uint8Array(
+      Buffer.from('hello streamtube multipart upload payload'),
+    );
 
     const uploadId = await service.createMultipartUpload(
       key,
@@ -66,7 +68,7 @@ describe('StorageService (integration — real MinIO)', () => {
   it('returns the requested byte range with 206 semantics', async () => {
     const key = `test/${randomUUID()}/original`;
     keys.push(key);
-    const payload = Buffer.from('0123456789ABCDEFGHIJ'); // 20 bytes
+    const payload = new Uint8Array(Buffer.from('0123456789ABCDEFGHIJ')); // 20 bytes
 
     const uploadId = await service.createMultipartUpload(key);
     const url = await service.presignUploadPart(key, uploadId, 1);
@@ -88,7 +90,7 @@ describe('StorageService (integration — real MinIO)', () => {
   it('presigns a download URL that streams the object with attachment disposition', async () => {
     const key = `test/${randomUUID()}/original`;
     keys.push(key);
-    const payload = Buffer.from('downloadable-content');
+    const payload = new Uint8Array(Buffer.from('downloadable-content'));
 
     const uploadId = await service.createMultipartUpload(key);
     const url = await service.presignUploadPart(key, uploadId, 1);

@@ -17,7 +17,13 @@ import {
 
 describe('VideosService (unit)', () => {
   let service: VideosService;
-  let repo: jest.Mocked<Pick<Repository<Video>, 'create' | 'save' | 'findOne' | 'find' | 'update'>>;
+  let repo: {
+    create: jest.Mock;
+    save: jest.Mock;
+    findOne: jest.Mock;
+    find: jest.Mock;
+    update: jest.Mock;
+  };
   let storage: jest.Mocked<
     Pick<
       StorageService,
@@ -158,9 +164,7 @@ describe('VideosService (unit)', () => {
 
     it('aborts the upload and throws when multipart completion fails', async () => {
       repo.findOne.mockResolvedValueOnce({ ...draftVideo });
-      storage.completeMultipartUpload.mockRejectedValueOnce(
-        new Error('boom'),
-      );
+      storage.completeMultipartUpload.mockRejectedValueOnce(new Error('boom'));
 
       await expect(
         service.completeUpload('user-1', 'video-1', [
@@ -185,9 +189,9 @@ describe('VideosService (unit)', () => {
         id: 'v',
         status: VideoStatus.PROCESSING,
       } as Video);
-      await expect(
-        service.getReadyForPlayback('pid'),
-      ).rejects.toBeInstanceOf(VideoNotReadyException);
+      await expect(service.getReadyForPlayback('pid')).rejects.toBeInstanceOf(
+        VideoNotReadyException,
+      );
     });
   });
 

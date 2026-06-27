@@ -4,7 +4,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository } from 'typeorm';
 import storageConfig from '../config/storage.config';
 import { ChannelsService } from '../channels/channels.service';
-import { StorageService, RangedObject, UploadedPart } from '../storage/storage.service';
+import {
+  StorageService,
+  RangedObject,
+  UploadedPart,
+} from '../storage/storage.service';
 import { CreateVideoDto } from './dto/create-video.dto';
 import { Video, VideoMetadata, VideoStatus } from './entities/video.entity';
 import {

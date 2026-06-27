@@ -7,8 +7,9 @@ import { ThrottlerStorage, ThrottlerStorageService } from '@nestjs/throttler';
 import { getQueueToken } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { randomUUID } from 'crypto';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { AppModule } from '../src/app.module';
-import { AuthService } from '../src/auth/auth.service';
 import { MailService } from '../src/mail/mail.service';
 import { DomainExceptionFilter } from '../src/common/filters/domain-exception.filter';
 import { ValidationExceptionFilter } from '../src/common/filters/validation-exception.filter';
@@ -66,7 +67,6 @@ describe('Videos (e2e)', () => {
     email = `owner_${randomUUID()}@test.local`,
     password = 'password123',
   ): Promise<string> {
-    const authService = app.get(AuthService);
     const mailService = app.get(MailService);
     let token = '';
     jest
@@ -99,7 +99,7 @@ describe('Videos (e2e)', () => {
 
     const putRes = await fetch(init.body.parts[0].url, {
       method: 'PUT',
-      body: payload,
+      body: new Uint8Array(payload),
     });
     const etag = putRes.headers.get('etag') as string;
 
@@ -265,4 +265,30 @@ describe('Videos (e2e)', () => {
     await request(server).get(`/videos/${publicId}/stream`).expect(409);
     await request(server).get(`/videos/${publicId}/download`).expect(409);
   });
+
+  it('processes a real upload end-to-end through the worker (upload → process → ready → stream)', async () => {
+    const fixture = readFileSync(join(__dirname, 'fixtures', 'sample.mp4'));
+    const token = await registerAndLogin();
+    const { publicId } = await initiateAndUpload(token, fixture);
+
+    let status = 'processing';
+    let body: Record<string, unknown> = {};
+    const deadline = Date.now() + 60000;
+    while (Date.now() < deadline) {
+      const res = await request(server).get(`/videos/${publicId}`).expect(200);
+      body = res.body;
+      status = res.body.status;
+      if (status === 'ready' || status === 'error') break;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+
+    expect(status).toBe('ready');
+    expect(body.durationSeconds).toBeGreaterThanOrEqual(1);
+    expect(body.metadata).toMatchObject({ width: 320, height: 240 });
+
+    await request(server)
+      .get(`/videos/${publicId}/stream`)
+      .set('Range', 'bytes=0-99')
+      .expect(206);
+  }, 90000);
 });

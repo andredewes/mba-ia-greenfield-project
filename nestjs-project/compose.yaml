@@ -59,6 +59,22 @@ services:
     volumes:
       - minio-data:/data
 
+  video-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    volumes:
+      - .:/home/node/app
+    working_dir: /home/node/app
+    command: sh -c "npm run start:worker"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+
 volumes:
   minio-data:
 

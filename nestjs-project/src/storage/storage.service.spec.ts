@@ -17,9 +17,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 async function buildService(): Promise<StorageService> {
   const moduleRef = await Test.createTestingModule({
-    imports: [
-      ConfigModule.forRoot({ isGlobal: true, load: [storageConfig] }),
-    ],
+    imports: [ConfigModule.forRoot({ isGlobal: true, load: [storageConfig] })],
     providers: [StorageService],
   }).compile();
   return moduleRef.get(StorageService);
@@ -45,9 +43,7 @@ describe('StorageService (unit)', () => {
     });
 
     it('builds the thumbnail key scoped by video id', () => {
-      expect(service.buildThumbnailKey('abc')).toBe(
-        'thumbnails/abc/thumb.jpg',
-      );
+      expect(service.buildThumbnailKey('abc')).toBe('thumbnails/abc/thumb.jpg');
     });
   });
 

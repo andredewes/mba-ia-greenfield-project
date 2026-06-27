@@ -50,9 +50,17 @@ describe('Database migrations (integration)', () => {
   });
 
   afterAll(async () => {
-    // The second test undoes the last migration, leaving token tables missing.
-    // Re-apply so the shared DB is fully migrated when subsequent suites run.
-    await dataSource.runMigrations();
+    // Leave a clean DB so later integration suites (which synchronize a subset
+    // of entities) do not deadlock against the videos→channels FK. The e2e run
+    // migrates separately.
+    for (const table of MANAGED_TABLES) {
+      await dataSource.query(`DROP TABLE IF EXISTS "${table}" CASCADE`);
+    }
+    await dataSource.query(`DROP TABLE IF EXISTS "migrations" CASCADE`);
+    await dataSource.query(
+      `DROP TYPE IF EXISTS "verification_tokens_type_enum" CASCADE`,
+    );
+    await dataSource.query(`DROP TYPE IF EXISTS "videos_status_enum" CASCADE`);
     await dataSource.destroy();
   });
 

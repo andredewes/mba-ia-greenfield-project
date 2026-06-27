@@ -17,6 +17,7 @@ import {
   ApiTags,
   getSchemaPath,
 } from '@nestjs/swagger';
+import { SkipThrottle } from '@nestjs/throttler';
 import { ApiErrorEnvelope } from '../common/openapi/api-error-envelope.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
@@ -59,6 +60,7 @@ function toVideoResponse(video: Video): VideoResponse {
 }
 
 @ApiTags('videos')
+@SkipThrottle()
 @Controller('videos')
 export class VideosController {
   constructor(private readonly videosService: VideosService) {}
@@ -76,10 +78,7 @@ export class VideosController {
     description: 'Missing or invalid access token',
     schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
   })
-  async initiate(
-    @CurrentUser() user: JwtPayload,
-    @Body() dto: CreateVideoDto,
-  ) {
+  async initiate(@CurrentUser() user: JwtPayload, @Body() dto: CreateVideoDto) {
     return this.videosService.initiateUpload(user.sub, dto);
   }
 
@@ -91,7 +90,10 @@ export class VideosController {
     description:
       'Finalizes the multipart upload, verifies the stored object, flips the video to processing, and enqueues processing.',
   })
-  @ApiResponse({ status: 202, description: 'Upload completed; processing queued' })
+  @ApiResponse({
+    status: 202,
+    description: 'Upload completed; processing queued',
+  })
   @ApiResponse({
     status: 403,
     description: 'Video does not belong to the current user',
@@ -133,9 +135,7 @@ export class VideosController {
     description: 'Video not found',
     schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
   })
-  async getOne(
-    @Param('publicId') publicId: string,
-  ): Promise<VideoResponse> {
+  async getOne(@Param('publicId') publicId: string): Promise<VideoResponse> {
     const video = await this.videosService.findByPublicIdOrThrow(publicId);
     return toVideoResponse(video);
   }
@@ -185,7 +185,10 @@ export class VideosController {
     description:
       'Redirects to a short-lived presigned URL that downloads the original file as an attachment. Only ready videos are downloadable.',
   })
-  @ApiResponse({ status: 302, description: 'Redirect to presigned download URL' })
+  @ApiResponse({
+    status: 302,
+    description: 'Redirect to presigned download URL',
+  })
   @ApiResponse({
     status: 409,
     description: 'Video is not ready for playback',

@@ -109,7 +109,9 @@ describe('VideosService (integration — MinIO + Postgres + Redis)', () => {
 
   it('completes a real multipart upload and enqueues a processing job', async () => {
     const channel = await seedChannel();
-    const payload = Buffer.from('integration multipart video bytes');
+    const payload = new Uint8Array(
+      Buffer.from('integration multipart video bytes'),
+    );
 
     const init = await service.initiateUpload(channel.user_id, {
       title: 'Full flow',
