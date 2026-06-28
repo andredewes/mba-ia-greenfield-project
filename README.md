@@ -59,8 +59,11 @@ Os dois subprojetos têm stacks Docker **separadas**. Suba primeiro o backend, r
 ```bash
 cd nestjs-project
 
-# Sobe API, banco, Mailpit, Redis, MinIO e worker de vídeo
-docker compose up -d
+# Cria o arquivo de ambiente local na primeira execução
+cp .env.example .env
+
+# Sobe API e infraestrutura. O worker entra depois do npm install.
+docker compose up -d db mailpit redis minio nestjs-api
 
 # Instala dependências (apenas na primeira vez)
 docker compose exec nestjs-api npm install
@@ -70,7 +73,12 @@ docker compose exec nestjs-api npm run migration:run
 
 # Sobe o servidor de desenvolvimento em watch mode
 docker compose exec -d nestjs-api npm run start:dev
+
+# Sobe o worker de vídeo depois que node_modules já existe
+docker compose up -d video-worker
 ```
+
+Em execuções seguintes, com `.env` e `node_modules` já criados, `docker compose up -d` sobe a stack inteira.
 
 Serviços disponíveis:
 
@@ -90,8 +98,8 @@ Serviços disponíveis:
 ```bash
 cd next-frontend
 
-# Garanta que o .env.local existe (veja .env.example)
-# API_URL aponta para o backend; SESSION_PASSWORD protege a sessão (iron-session)
+# Cria o arquivo de ambiente local na primeira execução
+cp .env.example .env.local
 
 docker compose up -d
 docker compose exec next-frontend npm install        # apenas na primeira vez
@@ -108,9 +116,10 @@ A aplicação ficará disponível em **http://localhost:3001**.
 
 ```bash
 cd nestjs-project
+docker compose up -d db mailpit redis minio nestjs-api
 docker compose stop video-worker                     # necessário para a suíte unitária + integração
 docker compose exec nestjs-api npm test               # unitários + integração
-docker compose start video-worker                     # necessário para o pipeline e2e de vídeo
+docker compose up -d video-worker                     # necessário para o pipeline e2e de vídeo
 docker compose exec nestjs-api npm run test:e2e       # end-to-end (HTTP via supertest)
 docker compose exec nestjs-api npm run test:cov       # cobertura
 ```
