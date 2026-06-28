@@ -6,8 +6,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-
-const TEN_GIB = 10 * 1024 * 1024 * 1024;
+import { MAX_VIDEO_UPLOAD_BYTES } from '../video-upload.constants';
 
 export class CreateVideoDto {
   @IsString()
@@ -25,6 +24,6 @@ export class CreateVideoDto {
 
   @IsInt()
   @Min(1)
-  @Max(TEN_GIB)
+  @Max(MAX_VIDEO_UPLOAD_BYTES)
   fileSize: number;
 }

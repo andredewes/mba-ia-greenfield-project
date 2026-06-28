@@ -20,6 +20,7 @@ import {
 } from './exceptions/video.exceptions';
 import { generatePublicId } from './public-id.util';
 import { VideoProcessingProducer } from './processing/video-processing.producer';
+import { MAX_VIDEO_UPLOAD_BYTES } from './video-upload.constants';
 
 const PG_UNIQUE_VIOLATION = '23505';
 const MAX_PUBLIC_ID_RETRIES = 5;
@@ -158,12 +159,27 @@ export class VideosService {
     }
 
     const head = await this.storageService.headObject(video.storage_key);
+    if (head.contentLength > MAX_VIDEO_UPLOAD_BYTES) {
+      video.size_bytes = String(head.contentLength);
+      video.status = VideoStatus.ERROR;
+      video.upload_id = null;
+      video.error_reason = 'Uploaded file exceeds 10GB limit';
+      await this.videoRepository.save(video);
+      await this.storageService.deleteObject(video.storage_key);
+      throw new InvalidUploadException('Uploaded file exceeds 10GB limit');
+    }
+
     video.size_bytes = String(head.contentLength);
     video.status = VideoStatus.PROCESSING;
     video.upload_id = null;
     const saved = await this.videoRepository.save(video);
 
-    await this.producer.enqueue(video.id);
+    try {
+      await this.producer.enqueue(video.id);
+    } catch (err) {
+      await this.markError(video.id, 'Video processing could not be queued');
+      throw err;
+    }
     return saved;
   }
 

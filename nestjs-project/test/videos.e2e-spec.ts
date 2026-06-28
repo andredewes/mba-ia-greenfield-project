@@ -152,6 +152,49 @@ describe('Videos (e2e)', () => {
       .expect(400);
   });
 
+  it('rate-limits upload writes but not public metadata reads', async () => {
+    const token = await registerAndLogin();
+    const first = await request(server)
+      .post('/videos')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        title: 'Readable',
+        filename: 'readable.mp4',
+        contentType: 'video/mp4',
+        fileSize: 10,
+      })
+      .expect(201);
+
+    throttlerStorage.storage.clear();
+    for (let i = 0; i < 10; i++) {
+      await request(server)
+        .post('/videos')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          title: `Limited ${i}`,
+          filename: `limited-${i}.mp4`,
+          contentType: 'video/mp4',
+          fileSize: 10,
+        })
+        .expect(201);
+    }
+    await request(server)
+      .post('/videos')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        title: 'Limited overflow',
+        filename: 'limited-overflow.mp4',
+        contentType: 'video/mp4',
+        fileSize: 10,
+      })
+      .expect(429);
+
+    throttlerStorage.storage.clear();
+    for (let i = 0; i < 12; i++) {
+      await request(server).get(`/videos/${first.body.publicId}`).expect(200);
+    }
+  });
+
   it('completes an upload and flips the video to processing', async () => {
     const token = await registerAndLogin();
     const payload = Buffer.from('hello video');

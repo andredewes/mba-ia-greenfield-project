@@ -60,7 +60,6 @@ function toVideoResponse(video: Video): VideoResponse {
 }
 
 @ApiTags('videos')
-@SkipThrottle()
 @Controller('videos')
 export class VideosController {
   constructor(private readonly videosService: VideosService) {}
@@ -118,6 +117,7 @@ export class VideosController {
   }
 
   @Get()
+  @SkipThrottle()
   @ApiBearerAuth()
   @ApiOperation({ summary: "List the caller's videos" })
   @ApiResponse({ status: 200, description: 'List of the caller videos' })
@@ -128,6 +128,7 @@ export class VideosController {
 
   @Public()
   @Get(':publicId')
+  @SkipThrottle()
   @ApiOperation({ summary: 'Get public video metadata' })
   @ApiResponse({ status: 200, description: 'Video metadata' })
   @ApiResponse({
@@ -142,6 +143,7 @@ export class VideosController {
 
   @Public()
   @Get(':publicId/stream')
+  @SkipThrottle()
   @ApiOperation({
     summary: 'Stream the video',
     description:
@@ -180,6 +182,7 @@ export class VideosController {
 
   @Public()
   @Get(':publicId/download')
+  @SkipThrottle()
   @ApiOperation({
     summary: 'Download the video',
     description:
