@@ -159,3 +159,52 @@ NestJS with standard module structure. Source lives in `src/`, compiled output i
 ## REST Conventions
 
 This is a RESTful API. All endpoints must follow standard REST conventions — correct HTTP methods, proper status codes, plural resource nouns, and consistent URL structure. Details are enforced via rules on controller files.
+
+## Videos (Phase 03 — Upload & Processing)
+
+The video pipeline lets a channel upload large files (up to 10GB) directly to object storage, processes them asynchronously, and serves streaming/download. It introduces three infrastructure services in `compose.yaml`: **`minio`** (S3-compatible object storage), **`redis`** (BullMQ broker), and **`video-worker`** (FFmpeg processor).
+
+### Module layout (`src/videos/`)
+
+- `entities/video.entity.ts` — `Video` (belongs to a `Channel`), status enum `draft → processing → ready | error`, `public_id` (unique short URL handle), storage/thumbnail keys, duration, jsonb metadata.
+- `videos.service.ts` — business logic: initiate upload (draft + presigned multipart), complete upload (finalize + verify + enqueue), lookups/ownership, streaming/download helpers, and worker-facing `markReady`/`markError`.
+- `videos.controller.ts` — REST endpoints (below). `@SkipThrottle()` so playback/reads are not rate-limited.
+- `dto/` — `CreateVideoDto`, `CompleteUploadDto`.
+- `public-id.util.ts` — `nanoid(12)` URL-safe id (pinned to `nanoid@^3`, CJS).
+- `exceptions/video.exceptions.ts` — domain errors (`VIDEO_NOT_FOUND`, `VIDEO_NOT_OWNED`, `VIDEO_NOT_READY`, `INVALID_UPLOAD`, `CHANNEL_NOT_FOUND`).
+- `processing/` — `video-processing.constants.ts` (queue/job names + payload), `video-processing.producer.ts` (enqueue), `ffmpeg.service.ts` (`ffprobe`/`ffmpeg` via `execFile`), `video.processor.ts` (BullMQ `@Processor`).
+
+Object storage lives in `src/storage/` (`StorageService` — AWS SDK v3, MinIO via `forcePathStyle`; bucket auto-bootstrap on boot). The worker is a standalone Nest app context in `src/worker/` (`worker.module.ts` + `main.ts`).
+
+### Endpoints
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| POST | `/videos` | Bearer | Initiate upload — creates draft, returns presigned multipart part URLs |
+| POST | `/videos/:id/complete` | Bearer (owner) | Finalize multipart, verify, flip to `processing`, enqueue job |
+| GET | `/videos` | Bearer | List the caller's videos |
+| GET | `/videos/:publicId` | Public | Video metadata |
+| GET | `/videos/:publicId/stream` | Public | Range streaming (`206 Partial Content`), only `ready` |
+| GET | `/videos/:publicId/download` | Public | `302` to presigned attachment URL, only `ready` |
+
+### Upload handshake (10GB, never through the API)
+
+`POST /videos` → API creates the draft + `CreateMultipartUpload` + presigns each part → client `PUT`s parts **directly to MinIO/S3** → `POST /videos/:id/complete` with the part ETags → API `CompleteMultipartUpload` + `HeadObject` (size) → status `processing` + enqueue `process-video` job. The API never relays the bytes.
+
+### Queue + worker
+
+BullMQ queue `video-processing`, job `process-video` (`{ videoId }`), `jobId = videoId` (idempotent), retries with exponential backoff (defaults 3 / 5000ms), failed jobs retained. The `video-worker` container consumes jobs: downloads the original, `ffprobe` for duration/metadata, `ffmpeg` for a thumbnail frame, uploads the thumbnail, and `markReady` (or `markError` after retries exhausted).
+
+### New environment variables
+
+`S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`, `S3_FORCE_PATH_STYLE`, `UPLOAD_PART_SIZE_BYTES`, `UPLOAD_PRESIGN_EXPIRY_SECONDS`, `DOWNLOAD_PRESIGN_EXPIRY_SECONDS`, `REDIS_HOST`, `REDIS_PORT`, `VIDEO_PROCESSING_ATTEMPTS`, `VIDEO_PROCESSING_BACKOFF_MS` (all defaulted to the Compose service names; see `.env.example`).
+
+### Running
+
+```bash
+docker compose up -d                 # starts db, mailpit, redis, minio, nestjs-api, video-worker
+# MinIO console: http://localhost:9001 (minioadmin / minioadmin)
+```
+
+The worker runs `npm run start:worker` (`ts-node --transpile-only src/worker/main.ts`). When running the unit/integration suite (`npm test`), the `video-worker` must be **stopped** — otherwise it consumes the `video-processing` queue and breaks queue-state integration tests. The end-to-end pipeline test (`npm run test:e2e`) requires the worker **running**. A `test/fixtures/sample.mp4` (a 2s clip) drives the real worker pipeline test.
+
