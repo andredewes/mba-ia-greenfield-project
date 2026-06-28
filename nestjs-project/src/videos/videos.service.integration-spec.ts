@@ -56,6 +56,9 @@ describe('VideosService (integration — MinIO + Postgres + Redis)', () => {
     storage = moduleRef.get(StorageService);
     dataSource = moduleRef.get(getDataSourceToken());
     queue = moduleRef.get(getQueueToken(VIDEO_PROCESSING_QUEUE));
+    // BullMQ re-emits the ioredis 'Connection is closed' event during teardown;
+    // without a listener the EventEmitter would throw and crash the test runner.
+    queue.on('error', () => undefined);
     userRepository = dataSource.getRepository(User);
     channelRepository = dataSource.getRepository(Channel);
     videoRepository = dataSource.getRepository(Video);
@@ -64,6 +67,7 @@ describe('VideosService (integration — MinIO + Postgres + Redis)', () => {
 
   afterAll(async () => {
     await queue.obliterate({ force: true });
+    await queue.close();
     await moduleRef.close();
   });
 

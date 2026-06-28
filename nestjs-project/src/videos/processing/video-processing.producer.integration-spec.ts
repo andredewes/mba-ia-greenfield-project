@@ -32,11 +32,15 @@ describe('VideoProcessingProducer (integration — real Redis)', () => {
 
     producer = moduleRef.get(VideoProcessingProducer);
     queue = moduleRef.get(getQueueToken(VIDEO_PROCESSING_QUEUE));
+    // BullMQ re-emits the ioredis 'Connection is closed' event during teardown;
+    // without a listener the EventEmitter would throw and crash the test runner.
+    queue.on('error', () => undefined);
     await queue.obliterate({ force: true });
   });
 
   afterAll(async () => {
     await queue.obliterate({ force: true });
+    await queue.close();
     await moduleRef.close();
   });
 
