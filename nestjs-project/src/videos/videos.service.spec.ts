@@ -7,6 +7,7 @@ import { Channel } from '../channels/entities/channel.entity';
 import { Video, VideoStatus } from './entities/video.entity';
 import { VideosService } from './videos.service';
 import { VideoProcessingProducer } from './processing/video-processing.producer';
+import { MAX_VIDEO_UPLOAD_BYTES } from './video-upload.constants';
 import {
   ChannelNotFoundException,
   InvalidUploadException,
@@ -33,6 +34,7 @@ describe('VideosService (unit)', () => {
       | 'completeMultipartUpload'
       | 'abortMultipartUpload'
       | 'headObject'
+      | 'deleteObject'
     >
   >;
   let channels: jest.Mocked<Pick<ChannelsService, 'findByUserId'>>;
@@ -62,6 +64,7 @@ describe('VideosService (unit)', () => {
       completeMultipartUpload: jest.fn().mockResolvedValue(undefined),
       abortMultipartUpload: jest.fn().mockResolvedValue(undefined),
       headObject: jest.fn().mockResolvedValue({ contentLength: 12345 }),
+      deleteObject: jest.fn().mockResolvedValue(undefined),
     };
     channels = { findByUserId: jest.fn().mockResolvedValue(channel) };
     producer = { enqueue: jest.fn().mockResolvedValue(undefined) };
@@ -133,6 +136,50 @@ describe('VideosService (unit)', () => {
       expect(saved.status).toBe(VideoStatus.PROCESSING);
       expect(saved.upload_id).toBeNull();
       expect(producer.enqueue).toHaveBeenCalledWith('video-1');
+    });
+
+    it('rejects an uploaded object larger than 10GB', async () => {
+      repo.findOne.mockResolvedValueOnce({ ...draftVideo });
+      storage.headObject.mockResolvedValueOnce({
+        contentLength: MAX_VIDEO_UPLOAD_BYTES + 1,
+      });
+
+      await expect(
+        service.completeUpload('user-1', 'video-1', [
+          { partNumber: 1, etag: 'e1' },
+        ]),
+      ).rejects.toBeInstanceOf(InvalidUploadException);
+
+      expect(storage.deleteObject).toHaveBeenCalledWith(
+        'videos/video-1/original',
+      );
+      expect(repo.save).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          status: VideoStatus.ERROR,
+          size_bytes: String(MAX_VIDEO_UPLOAD_BYTES + 1),
+          upload_id: null,
+        }),
+      );
+      expect(producer.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('marks the video as error when queue enqueue fails', async () => {
+      repo.findOne.mockResolvedValueOnce({ ...draftVideo });
+      producer.enqueue.mockRejectedValueOnce(new Error('redis down'));
+
+      await expect(
+        service.completeUpload('user-1', 'video-1', [
+          { partNumber: 1, etag: 'e1' },
+        ]),
+      ).rejects.toThrow('redis down');
+
+      expect(repo.update).toHaveBeenCalledWith(
+        { id: 'video-1' },
+        {
+          status: VideoStatus.ERROR,
+          error_reason: 'Video processing could not be queued',
+        },
+      );
     });
 
     it('throws VideoNotOwnedException for a video owned by another channel', async () => {
