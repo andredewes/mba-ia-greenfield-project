@@ -21,19 +21,32 @@ Only start the NestJS dev server (`npm run start:dev`) when the user **explicitl
 This project runs inside Docker. Always use the container for development:
 
 ```bash
-# Start containers
-docker compose up -d
+# Create local env file on first run
+cp .env.example .env
+
+# Start API + infrastructure first. Start video-worker after npm install.
+docker compose up -d db mailpit redis minio nestjs-api
 
 # Install dependencies (first time only)
 docker compose exec nestjs-api npm install
 
+# Run migrations before serving the API
+docker compose exec nestjs-api npm run migration:run
+
 # Run the dev server (watch mode)
-docker compose exec nestjs-api npm run start:dev
+docker compose exec -d nestjs-api npm run start:dev
+
+# Start the video worker after node_modules exists
+docker compose up -d video-worker
 ```
 
 Services:
 - `nestjs-api` — NestJS API, port `3000`
 - `db` — PostgreSQL 17, port `5432`, database `streamtube`, user/password `streamtube`
+- `mailpit` — email capture UI, port `8025`; SMTP port `1025`
+- `redis` — BullMQ broker, port `6379`
+- `minio` — S3-compatible storage, API port `9000`, console port `9001`
+- `video-worker` — FFmpeg worker consuming BullMQ jobs
 
 All verification and teardown commands run on the **host machine**:
 
@@ -47,6 +60,7 @@ docker compose exec db pg_isready -U streamtube
 # Check container logs
 docker compose logs nestjs-api
 docker compose logs db
+docker compose logs video-worker
 
 # Tear down the entire environment
 docker compose down
@@ -202,9 +216,14 @@ BullMQ queue `video-processing`, job `process-video` (`{ videoId }`), `jobId = v
 ### Running
 
 ```bash
-docker compose up -d                 # starts db, mailpit, redis, minio, nestjs-api, video-worker
+cp .env.example .env                 # first run only
+docker compose up -d db mailpit redis minio nestjs-api
+docker compose exec nestjs-api npm install
+docker compose exec nestjs-api npm run migration:run
+docker compose exec -d nestjs-api npm run start:dev
+docker compose up -d video-worker
 # MinIO console: http://localhost:9001 (minioadmin / minioadmin)
 ```
 
-The worker runs `npm run start:worker` (`ts-node --transpile-only src/worker/main.ts`). When running the unit/integration suite (`npm test`), the `video-worker` must be **stopped** — otherwise it consumes the `video-processing` queue and breaks queue-state integration tests. The end-to-end pipeline test (`npm run test:e2e`) requires the worker **running**. A `test/fixtures/sample.mp4` (a 2s clip) drives the real worker pipeline test.
+The worker runs `npm run start:worker` (`ts-node --transpile-only src/worker/main.ts`). On a clean clone, start it only after `npm install`, because the bind-mounted project needs `node_modules` before the worker command can run. When running the unit/integration suite (`npm test`), the `video-worker` must be **stopped** — otherwise it consumes the `video-processing` queue and breaks queue-state integration tests. The end-to-end pipeline test (`npm run test:e2e`) requires the worker **running**. A `test/fixtures/sample.mp4` (a 2s clip) drives the real worker pipeline test.
 
